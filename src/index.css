@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+:root {
+  --bg:          #F7F5F0;
+  --surface:     #FFFFFF;
+  --surface2:    #F0EDE6;
+  --green:       #1A6B4A;
+  --green-light: #E8F5EE;
+  --green-mid:   #5DCAA5;
+  --text:        #1C1C1A;
+  --text-muted:  #7A7870;
+  --text-hint:   #B0ADA6;
+  --border:      rgba(0,0,0,0.07);
+  --shadow:      0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  --radius:      16px;
+  --radius-sm:   10px;
+}
+
+[data-theme="dark"] {
+  --bg:          #141412;
+  --surface:     #1E1E1B;
+  --surface2:    #252521;
+  --green:       #1D9E75;
+  --green-light: #0D2E20;
+  --text:        #F0EDE6;
+  --text-muted:  #8A8780;
+  --text-hint:   #55534E;
+  --border:      rgba(255,255,255,0.07);
+  --shadow:      0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2);
+}
+
+*, *::before, *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease;
+}
+
+body {
+  background: var(--bg);
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up   { animation: fadeUp 0.4s ease both; }
+.fade-up-1 { animation: fadeUp 0.4s 0.05s ease both; }
+.fade-up-2 { animation: fadeUp 0.4s 0.10s ease both; }
+.fade-up-3 { animation: fadeUp 0.4s 0.15s ease both; }
+.fade-up-4 { animation: fadeUp 0.4s 0.20s ease both; }
