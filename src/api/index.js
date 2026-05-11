@@ -1,6 +1,6 @@
 import axios from "axios";
 export const getBestStreak = () => api.get("/stats/streak", { params: { today: localToday() } });
-const api = axios.create({ baseURL: "http://192.168.100.52:5000//api" });
+const api = axios.create({ baseURL: "https://habitsbackend.onrender.com//api" });
 // intercepta cada request para agregar el token automáticamente
 api.interceptors.request.use(req => {
   const token = localStorage.getItem("token");
