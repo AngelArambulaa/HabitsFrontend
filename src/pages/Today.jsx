@@ -1,9 +1,12 @@
+
 import { useState, useEffect } from "react";
-import { useStats } from "../hooks/useStats";
-
 import { getHabits, getLogs, toggleLog, localToday } from "../api";
-const today = localToday();
+import { useStats } from "../hooks/useStats";
+import NoteModal  from "../components/NoteModal";
+import PageLoader from "../components/PageLoader";
+import { useNavigate } from "react-router-dom";
 
+const today      = localToday();
 const CIRC       = 2 * Math.PI * 30;
 const DAY_JS     = new Date().getDay();
 const todayIndex = DAY_JS === 0 ? 6 : DAY_JS - 1;
@@ -18,9 +21,13 @@ const ICON_BG = {
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
 export default function Today() {
-  const [habits, setHabits] = useState([]);
-  const [done,   setDone]   = useState(new Set());
-  const { weeklyAvg, loading, refetch } = useStats();
+  const [habits,     setHabits]     = useState([]);
+  const [done,       setDone]       = useState(new Set());
+  const [noteTarget, setNoteTarget] = useState(null);
+  const [pageLoading, setPageLoading] = useState(true);   
+  const [toggling,   setToggling]   = useState(new Set()); // per-habit toggle loading
+  const { weeklyAvg, loading: statsLoading, refetch } = useStats();
+  const navigate = useNavigate();
 
   useEffect(() => {
     Promise.all([getHabits(), getLogs(today)]).then(([h, l]) => {
@@ -29,18 +36,39 @@ export default function Today() {
       );
       setHabits(scheduled);
       setDone(new Set(l.data.map(log => log.habit_id)));
-    });
+    }).finally(() => setPageLoading(false));              
   }, []);
 
-  const toggle = async (id) => {
-    await toggleLog(id, today);
-    setDone(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-    refetch();
+  const handleClick = (habit) => {
+    if (toggling.has(habit._id)) return;                  
+    if (done.has(habit._id)) {
+      commitToggle(habit._id, "");
+    } else {
+      setNoteTarget(habit);
+    }
   };
+
+  const commitToggle = async (id, note) => {
+    setNoteTarget(null);
+    setToggling(prev => new Set(prev).add(id));           // marca como loading
+    try {
+      await toggleLog(id, today, note);
+      setDone(prev => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+      refetch();
+    } finally {
+      setToggling(prev => {                               // unmark when done
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  if (pageLoading) return <PageLoader />;                 // show skeleton
 
   const doneCount = done.size;
   const total     = habits.length;
@@ -60,6 +88,15 @@ export default function Today() {
 
   return (
     <div>
+      {noteTarget && (
+        <NoteModal
+          habit={noteTarget}
+          onConfirm={note => commitToggle(noteTarget._id, note)}
+          onSkip={()      => commitToggle(noteTarget._id, "")}
+          onClose={()     => setNoteTarget(null)}
+        />
+      )}
+
       {/* Ring card */}
       <div className="fade-up-2" style={{
         background:"var(--green)", borderRadius:"var(--radius)",
@@ -94,7 +131,7 @@ export default function Today() {
         </div>
         <div style={card}>
           <div style={{ fontSize:11, color:"var(--text-hint)", fontWeight:500, letterSpacing:"0.05em", textTransform:"uppercase", marginBottom:6 }}>This week</div>
-          <div style={{ fontSize:22, fontWeight:600, color:"var(--text)" }}>{loading ? "—" : `${weeklyAvg}%`}</div>
+          <div style={{ fontSize:22, fontWeight:600, color:"var(--text)" }}>{statsLoading ? "—" : `${weeklyAvg}%`}</div>
           <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>avg completion</div>
         </div>
       </div>
@@ -111,36 +148,51 @@ export default function Today() {
           </p>
         )}
 
-        {habits.map(h => (
-          <div key={h._id} onClick={() => toggle(h._id)}
-            style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 1.25rem", borderBottom:"1px solid var(--border)", cursor:"pointer" }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-          >
-            <div style={{ width:36, height:36, borderRadius:10, flexShrink:0, background: ICON_BG[h.icon] || "#F0EDE6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>
-              {h.icon}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:500, color: done.has(h._id) ? "var(--text-hint)" : "var(--text)", textDecoration: done.has(h._id) ? "line-through" : "none", transition:"all 0.2s" }}>
-                {h.name}
+        {habits.map(h => {
+          const isToggling = toggling.has(h._id);
+          return (
+            <div key={h._id}
+              style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 1.25rem", borderBottom:"1px solid var(--border)", cursor: isToggling ? "wait" : "pointer", opacity: isToggling ? 0.6 : 1, transition:"opacity 0.2s" }}
+              onMouseEnter={e => { if (!isToggling) e.currentTarget.style.background = "var(--bg)"; }}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <div onClick={() => navigate(`/habit/${h._id}`)}
+                style={{ width:36, height:36, borderRadius:10, flexShrink:0, background: ICON_BG[h.icon] || "#F0EDE6", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, cursor:"pointer" }}>
+                {h.icon}
               </div>
-              <div style={{ fontSize:11, color:"var(--text-hint)", marginTop:1 }}>
-                {h.category} · {(!h.days || h.days.length === 7) ? "every day" : h.days.map(d => DAYS[d]).join(", ")}
+
+              <div style={{ flex:1 }} onClick={() => navigate(`/habit/${h._id}`)}>
+                <div style={{ fontSize:14, fontWeight:500, color: done.has(h._id) ? "var(--text-hint)" : "var(--text)", textDecoration: done.has(h._id) ? "line-through" : "none", transition:"all 0.2s" }}>
+                  {h.name}
+                </div>
+                <div style={{ fontSize:11, color:"var(--text-hint)", marginTop:1 }}>
+                  {h.category} · {(!h.days || h.days.length === 7) ? "every day" : h.days.map(d => DAYS[d]).join(", ")}
+                </div>
+              </div>
+
+              {/* Check button — shows spinner while toggling */}
+              <div onClick={() => handleClick(h)} style={{
+                width:30, height:30, borderRadius:"50%", flexShrink:0,
+                border:     done.has(h._id) ? "none" : "1.5px solid var(--text-hint)",
+                background: done.has(h._id) ? "var(--green)" : "none",
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:13, color:"#fff",
+                transform:  done.has(h._id) && !isToggling ? "scale(1.1)" : "scale(1)",
+                transition: "all 0.2s cubic-bezier(0.34,1.56,0.64,1)",
+                cursor:     isToggling ? "wait" : "pointer",
+              }}>
+                {isToggling
+                  ? <svg width="14" height="14" viewBox="0 0 24 24" style={{ animation:"spin 0.7s linear infinite" }}>
+                      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                      <circle cx="12" cy="12" r="10" fill="none" stroke={done.has(h._id) ? "#fff" : "var(--text-hint)"} strokeWidth="3" strokeOpacity="0.3"/>
+                      <path d="M12 2a10 10 0 0 1 10 10" fill="none" stroke={done.has(h._id) ? "#fff" : "var(--green)"} strokeWidth="3" strokeLinecap="round"/>
+                    </svg>
+                  : done.has(h._id) ? "✓" : ""
+                }
               </div>
             </div>
-            <div style={{
-              width:30, height:30, borderRadius:"50%", flexShrink:0,
-              border: done.has(h._id) ? "none" : "1.5px solid var(--text-hint)",
-              background: done.has(h._id) ? "var(--green)" : "none",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:13, color:"#fff",
-              transform: done.has(h._id) ? "scale(1.1)" : "scale(1)",
-              transition:"all 0.2s cubic-bezier(0.34,1.56,0.64,1)",
-            }}>
-              {done.has(h._id) ? "✓" : ""}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

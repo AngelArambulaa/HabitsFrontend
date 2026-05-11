@@ -1,7 +1,7 @@
 const COLORS = ["#F1EFE8","#9FE1CB","#5DCAA5","#1D9E75","#0F6E56"];
 
 export default function Heatmap({ data }) {
-  // split 30 days into rows of 7
+  // partir 30 dias en filas de 7 para simular un calendario
   const rows = [];
   for (let i = 0; i < data.length; i += 7) rows.push(data.slice(i, i + 7));
 
